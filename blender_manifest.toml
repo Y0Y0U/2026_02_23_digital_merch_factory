@@ -1,0 +1,22 @@
+schema_version = "1.0.0"
+
+id = "digital_merch_factory"
+version = "1.0.0"
+name = "Digital merch factory - 赛博谷子工厂"
+tagline = "谷子样机一键生成"
+maintainer = "yyu"
+type = "add-on"
+license = ["SPDX:GPL-2.0-or-later"]
+blender_version_min = "4.2.0"
+
+# Supported platforms (leave empty for all platforms)
+platforms = ["windows-x64"]
+
+[permissions]
+files = "allow" # Allow file access for reading images and writing temporary files
+network = "deny" # No network access needed
+clipboard = "deny"
+camera = "deny"
+microphone = "deny"
+location = "deny"
+notifications = "deny"
