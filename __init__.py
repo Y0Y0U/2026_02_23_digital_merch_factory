@@ -1,7 +1,7 @@
 bl_info = {
     "name": "Digital Merch Factory",
     "author": "yyu",
-    "version": (1, 0, 0),
+    "version": (0, 1, 0),
     "blender": (4, 2, 0),
     "location": "View3D > Sidebar > Digital Merch",
     "description": "一键生成亚克力立牌",

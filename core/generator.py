@@ -155,10 +155,18 @@ def _create_base(context, parent_obj, socket_obj, length: float, width: float, t
     bpy.ops.mesh.primitive_cube_add(size=1.0)
     base_obj = context.active_object
     base_obj.name = f"底板_{parent_obj.name}"
-    base_obj.scale = (float(length), float(width), float(thickness))
+    
+    # 使底板与主体垂直：
+    # 父级最终会绕X轴旋转90度，因此：
+    # Local X (最终 Global X) = 宽度 (width)
+    # Local Y (最终 Global Z) = 厚度 (thickness)
+    # Local Z (最终 Global -Y) = 长度 (length)
+    base_obj.scale = (float(width), float(thickness), float(length))
     _apply_scale(context, base_obj)
+    
     base_obj.parent = parent_obj
-    base_obj.location = (0.0, -float(width) / 2.0, 0.0)
+    # 位置：使底板顶面与主体底面(Y=0)齐平
+    base_obj.location = (0.0, -float(thickness) / 2.0, 0.0)
 
     mod = base_obj.modifiers.new(name="Socket_Diff", type="BOOLEAN")
     mod.operation = "DIFFERENCE"

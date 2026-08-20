@@ -1,8 +1,8 @@
 schema_version = "1.0.0"
 
 id = "digital_merch_factory"
-version = "1.0.0"
-name = "Digital merch factory - 赛博谷子工厂"
+version = "0.1.0"
+name = "Digital merch factory - 赛博谷子工厂 v0.1.0"
 tagline = "谷子样机一键生成"
 maintainer = "yyu"
 type = "add-on"
