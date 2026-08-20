@@ -105,6 +105,8 @@ def _extrude_thickness(context, obj, thickness: float, use_modifier: bool):
         MESH_OT_extrude_region={"use_normal_flip": False, "mirror": False},
         TRANSFORM_OT_translate={"value": (0, 0, thickness), "orient_type": "GLOBAL"},
     )
+    # 选中所有面（移动后新面被选中，原始面没被选中）
+    bpy.ops.mesh.select_all(action="SELECT")
     bpy.ops.transform.translate(value=(0, 0, -thickness / 2.0))
     bpy.ops.mesh.select_all(action="SELECT")
     bpy.ops.mesh.normals_make_consistent(inside=False)
