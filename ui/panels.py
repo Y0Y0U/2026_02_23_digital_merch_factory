@@ -176,6 +176,7 @@ class ACRYLIC_PT_BaseSettings(bpy.types.Panel):
         col_mat = col_base_group.column(align=True)
         col_mat.active = props.base_use_separate_material
         col_mat.prop(props, "base_material")
+        col_mat.operator("acrylic.create_default_base_material", text="新建默认底板材质", icon='SHADING_RENDERED')
 
 
 class ACRYLIC_PT_RainbowSettings(bpy.types.Panel):

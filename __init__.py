@@ -30,6 +30,7 @@ classes = (
     operators.ACRYLIC_OT_ResetToDefaults,  # 恢复默认数值（不影响开关）
     operators.ACRYLIC_OT_CreateDefaultAcrylicMaterial,  # 默认亚克力材质
     operators.ACRYLIC_OT_CreateDefaultRainbowMaterial,  # 默认彩窗材质
+    operators.ACRYLIC_OT_CreateDefaultBaseMaterial,  # 默认底板材质
     operators.ACRYLIC_OT_CreateRainbowFromSelection,  # 生成彩窗
     panels.ACRYLIC_PT_MainPanel,
     panels.ACRYLIC_PT_ImageSettings,

@@ -58,8 +58,17 @@ class NamingManager:
         return f"{NamingManager._batch_prefix(context)}_{timestamp}"
 
     @staticmethod
+    def _plane_prefix(context) -> str:
+        prefs = _get_prefs(context)
+        return getattr(prefs, "plane_prefix", "图案") if prefs else "图案"
+
+    @staticmethod
     def get_model_collection_name(index: int, name_pure: str, context=None) -> str:
         return f"{NamingManager._model_prefix(context)}_{index:02d}_{name_pure}"
+
+    @staticmethod
+    def get_plane_obj_name(index: int, name_pure: str, context=None) -> str:
+        return f"{NamingManager._plane_prefix(context)}_{index:02d}_{name_pure}"
 
     @staticmethod
     def get_rainbow_obj_name(source_obj_name: str) -> str:

@@ -65,9 +65,9 @@ def _apply_scale(context, obj):
 
 def _align_origin(obj, mode: str):
     if mode not in {"LEFT", "CENTER"}:
-        return
+        return mathutils.Vector((0.0, 0.0, 0.0))
     if not obj or not getattr(obj, "data", None):
-        return
+        return mathutils.Vector((0.0, 0.0, 0.0))
     bbox = [mathutils.Vector(corner) for corner in obj.bound_box]
     min_x = min(v.x for v in bbox)
     max_x = max(v.x for v in bbox)
@@ -77,6 +77,7 @@ def _align_origin(obj, mode: str):
     else:
         offset = mathutils.Vector((-min_x, -min_y, 0.0))
     obj.data.transform(mathutils.Matrix.Translation(offset))
+    return offset
 
 
 def _extrude_thickness(context, obj, thickness: float, use_modifier: bool):
@@ -125,6 +126,74 @@ def _add_bevel(obj, bevel_depth: float, enabled: bool):
     bevel.segments = 4
     bevel.limit_method = "ANGLE"
     bevel.angle_limit = math.radians(30)
+
+
+def _import_texture_plane(context, tex_path: str, name_pure: str, index: int, model_coll, target_obj):
+    """导入 PNG 贴图平面：原点调整到左下角，缩放到与 SVG 一致并移动到与 SVG 重合"""
+    if not tex_path or not os.path.exists(tex_path):
+        return None
+
+    _ensure_object_mode(context)
+    import_tex_path = os.path.abspath(tex_path)
+    tex_file_name = os.path.basename(import_tex_path)
+    tex_dir = os.path.dirname(import_tex_path)
+
+    try:
+        old_colls = set(bpy.data.collections)
+        bpy.ops.image.import_as_mesh_planes(
+            filepath=import_tex_path,
+            files=[{"name": tex_file_name}],
+            directory=tex_dir,
+            align_axis="+Z",
+        )
+    except Exception as e:
+        print(f"同步导入贴图失败: {e}")
+        return None
+
+    # 清理导入时自动创建的集合（平面将放入模型集合）
+    for coll in set(bpy.data.collections) - old_colls:
+        bpy.data.collections.remove(coll)
+
+    plane = context.active_object
+    if not plane or plane.type != "MESH":
+        return None
+
+    # 修复贴图路径为绝对路径并重载，避免相对路径丢失
+    for mat in plane.data.materials:
+        if mat and mat.use_nodes:
+            for node in mat.node_tree.nodes:
+                if node.type == "TEX_IMAGE" and node.image:
+                    node.image.filepath = import_tex_path
+                    try:
+                        node.image.reload()
+                    except Exception:
+                        pass
+
+    _move_obj_to_collection(plane, model_coll)
+    plane.name = naming.NamingManager.get_plane_obj_name(index, name_pure, context=context)
+
+    # 步骤一：将 PNG 平面的原点位置调整到平面的左下角
+    # 不用 3D 游标，不用 bpy.ops。
+    # 直接通过平移 4 个顶点的本地坐标，将原点完美锁定在左下角。
+    # 1. 找到这 4 个顶点在【本地空间】中 X 和 Y 的最小值
+    # 因为平面没有旋转，本地空间的 min_x 和 min_y 对应的必定是绝对的左下角顶点
+    min_x = min(v.co.x for v in plane.data.vertices)
+    min_y = min(v.co.y for v in plane.data.vertices)
+
+    # 2. 直接修改网格顶点数据：将所有顶点往相反方向平移
+    # 这样，原左下角顶点的本地坐标会变为 (0, 0, 0)，也就是变成了物体的原点
+    for v in plane.data.vertices:
+        v.co.x -= min_x
+        v.co.y -= min_y
+
+    # 3. 告知 Blender 网格数据已更新
+    plane.data.update()
+
+    # 步骤二：将平面的位置移动到和 SVG 重合（两者原点都在左下角）
+    plane.location = target_obj.location
+
+    return plane
+
 
 
 def _create_socket(context, parent_obj, width: float, height: float, thickness: float):
@@ -181,6 +250,34 @@ def _create_base(context, parent_obj, socket_obj, length: float, width: float, t
     return base_obj
 
 
+def _resolve_model_material(context, props):
+    """解析立牌本体材质：优先用户设置在材质槽的材质，未设置则生成默认亚克力材质"""
+    mat = getattr(props, "material_to_assign", None)
+    if not mat:
+        mat = materials.get_or_create_acrylic_material(context)
+    return mat
+
+
+def _apply_base_material(context, base_obj, props):
+    """底板材质：开启独立底板材质时用用户设置的底板材质，否则与立牌本体材质一致"""
+    _ensure_object_mode(context)
+    if bool(getattr(props, "base_use_separate_material", False)) and getattr(props, "base_material", None):
+        mat = props.base_material
+    else:
+        mat = _resolve_model_material(context, props)
+    if not base_obj.data.materials:
+        base_obj.data.materials.append(mat)
+    else:
+        base_obj.data.materials[0] = mat
+
+
+def _cleanup_svg_materials():
+    """删除导入 SVG 时自动生成且未被使用的多余材质"""
+    for mat in list(bpy.data.materials):
+        if mat.users == 0:
+            bpy.data.materials.remove(mat)
+
+
 def create_model(context, svg_path: str, tex_path: str, name_pure: str, index: int, batch_coll):
     props = context.scene.acrylic_props
 
@@ -204,13 +301,22 @@ def create_model(context, svg_path: str, tex_path: str, name_pure: str, index: i
     _move_obj_to_collection(svg_obj, model_coll)
 
     svg_obj = _convert_to_mesh(context, svg_obj)
+    svg_obj.data.materials.clear()
 
+    # 同步导入贴图平面：紧跟在 SVG 导入之后（原点调整/自动立起之前）
+    plane_obj = None
+    if bool(getattr(props, "sync_image", True)) and tex_path:
+        plane_obj = _import_texture_plane(context, tex_path, name_pure, index, model_coll, svg_obj)
+
+    # 原点调整：SVG 和贴图平面各自独立基于自身 bound_box 计算
     _ensure_object_mode(context)
     bpy.ops.object.select_all(action="DESELECT")
     svg_obj.select_set(True)
     context.view_layer.objects.active = svg_obj
     bpy.ops.object.origin_set(type="ORIGIN_GEOMETRY", center="BOUNDS")
     _align_origin(svg_obj, getattr(props, "origin_mode", "LEFT"))
+    if plane_obj:
+        _align_origin(plane_obj, getattr(props, "origin_mode", "LEFT"))
 
     scale = float(getattr(props, "model_scale", 1.0))
     root.scale = (scale, scale, scale)
@@ -225,15 +331,11 @@ def create_model(context, svg_path: str, tex_path: str, name_pure: str, index: i
     except Exception:
         pass
 
-    if getattr(props, "material_to_assign", None):
-        if not svg_obj.data.materials:
-            svg_obj.data.materials.append(props.material_to_assign)
-        else:
-            svg_obj.data.materials[0] = props.material_to_assign
+    mat = _resolve_model_material(context, props)
+    if not svg_obj.data.materials:
+        svg_obj.data.materials.append(mat)
     else:
-        mat = materials.get_or_create_acrylic_material(context)
-        if not svg_obj.data.materials:
-            svg_obj.data.materials.append(mat)
+        svg_obj.data.materials[0] = mat
 
     svg_obj.parent = root
     svg_obj.location = (0.0, 0.0, 0.0)
@@ -259,6 +361,12 @@ def create_model(context, svg_path: str, tex_path: str, name_pure: str, index: i
             thickness,
         )
         _move_obj_to_collection(base_obj, model_coll)
+        _apply_base_material(context, base_obj, props)
+
+    # 贴图平面父级设置
+    if plane_obj:
+        plane_obj.parent = root
+        plane_obj.location = (0.0, 0.0, 0.0)
 
     if bool(getattr(props, "lock_non_controllers", False)):
         try:
@@ -274,5 +382,8 @@ def create_model(context, svg_path: str, tex_path: str, name_pure: str, index: i
 
     if bool(getattr(props, "auto_stand_up", False)):
         root.rotation_euler.x = math.radians(90)
+
+    # 自动清理导入 SVG 时多余的孤立材质
+    _cleanup_svg_materials()
 
     return model_coll

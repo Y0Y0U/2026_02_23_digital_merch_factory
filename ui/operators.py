@@ -291,8 +291,9 @@ class ACRYLIC_OT_CreateDefaultAcrylicMaterial(bpy.types.Operator):
     bl_label = "新建默认亚克力材质"  # UI 显示名称
     
     def execute(self, context):
-        materials.get_or_create_acrylic_material(context)  # 创建/获取材质
-        self.report({'INFO'}, "已创建默认材质")  # 成功提示
+        mat = materials.get_or_create_acrylic_material(context)  # 创建/获取材质
+        context.scene.acrylic_props.material_to_assign = mat  # 放入插件材质槽
+        self.report({'INFO'}, f"已创建默认材质: {mat.name}")  # 成功提示
         return {'FINISHED'}
 
 class ACRYLIC_OT_CreateDefaultRainbowMaterial(bpy.types.Operator):
@@ -301,8 +302,19 @@ class ACRYLIC_OT_CreateDefaultRainbowMaterial(bpy.types.Operator):
     
     def execute(self, context):
         props = context.scene.acrylic_props
-        materials.get_or_create_rainbow_material(context, colorful=props.use_rainbow_colorful)  # 创建/获取材质
-        self.report({'INFO'}, "已创建彩窗材质")  # 成功提示
+        mat = materials.get_or_create_rainbow_material(context, colorful=props.use_rainbow_colorful)  # 创建/获取材质
+        props.rainbow_material = mat  # 放入插件材质槽
+        self.report({'INFO'}, f"已创建彩窗材质: {mat.name}")  # 成功提示
+        return {'FINISHED'}
+
+class ACRYLIC_OT_CreateDefaultBaseMaterial(bpy.types.Operator):
+    bl_idname = "acrylic.create_default_base_material"  # 操作符 ID
+    bl_label = "新建默认底板材质"  # UI 显示名称
+    
+    def execute(self, context):
+        mat = materials.get_or_create_acrylic_material(context)  # 创建/获取默认亚克力材质
+        context.scene.acrylic_props.base_material = mat  # 放入底板材质槽
+        self.report({'INFO'}, f"已创建默认底板材质: {mat.name}")  # 成功提示
         return {'FINISHED'}
 
 class ACRYLIC_OT_CreateRainbowFromSelection(bpy.types.Operator):
